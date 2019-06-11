@@ -1,0 +1,455 @@
+---
+title: "Stock Investing: Maximizing Returns, Minimizing Risk"
+author: "Patrick Vincent N. Lubenia"
+urlcolor: blue
+output:
+  pdf_document: default
+---
+
+
+# **Executive Summary**
+
+The main objective of this study is to determine a strategy for choosing a portfolio of stocks with the highest return and lowest risk while, at the same time, beating the performance of a benchmark. Several methods of choosing stocks are presented in this paper. Given a set of stocks, Model 1 invests equally in all of them. This approach is too simple and does not account for various characteristics that drive the price of stocks. This exercise focuses on developing Model 2 which utilizes a single-index model. This incorporates information from safe investments like Treasury bills, a benchmark stock market index, and the volatility and correlation of stock returns. The risk-return profile of a portfolio of recommended stocks and their corresponding weights are presented. Model 3 takes into consideration the recommended stocks from using Model 2 but ignores the suggested weights, and invests equally in them. Comparing the performance of the models with each other and with the performance of the benchmark index, Model 2 provides superior returns over the benchmark while, at the same time, minimizing the risk of the portfolio.
+
+
+## **Introduction**
+
+One of the challenges of investing in the stock market is knowing which stocks to buy. One can simply listen to the news and choose companies that have good feedback. However, not everyone has the luxury of time to keep track of everything that's going on with all the companies listed in a stock market. Thus, in this paper, a strategy is devised on how to choose stocks to invest in.
+
+The rest of the paper is organized as follows: 1) data collected are discussed, and their limitations explained; 2) the entire process of constructing portfolios and validating the results are presented; 3) results are discussed and analyzed; and 4) finally, the paper concludes with insights and recommendations.
+
+
+## **Data and Limitations**
+
+Several time series data are used in this study:
+
+1. Historical prices of stocks
+2. Historical levels of a market index
+3. Historical rates of Treasury bills
+2. Historical dividends distributed to investors
+
+6 years of daily historical prices of 10 stocks (random blue chip companies) from the Philippine Stock Exchange (PSE), historical levels of the PSE Index, and historical rates of 91-day Philippine Treasury bills from December 2012 to December 2018 are collected from Bloomberg LP. The [website of the PSE](https://pse.com.ph/stockMarket/home.html) can also be used for gathering data for the stocks and the index.
+
+Dividends distributed during the period of study are collected from the [Pinoy Money Talk website](https://www.pinoymoneytalk.com/philippine-stocks-dividend-yield/) and the [PSE Edge website](http://edge.pse.com.ph/). Dates represent ex-dividend dates since it is then that the market incorporates the dividends in the price for the day.
+
+The 10 stocks chosen for the purpose of illustration are:
+
+1. ali - Ayala Land (real estate)
+2. bdo - Banco de Oro (bank)
+3. bpi - Bank of the Philippine Islands (bank)
+4. dmc - DMC (real estate)
+5. jfc - Jollibee Foods (food)
+6. mer - Meralco (electricty)
+7. secb - Security Bank (bank)
+8. smc - San Miguel (conglomerate)
+9. tel - PLDT (telecommunications)
+10. urc - Universal Robina (retail)
+
+```{r include=FALSE}
+  library(readxl)
+  library(tidyverse)
+  library(dplyr)
+  library(knitr)
+  data <- read_excel("data.xlsx")
+  dividends <- read_excel("dividends.xlsx")
+  data_validation <- read_excel("data_validation.xlsx")
+  dividends_validation <- read_excel("dividends_validation.xlsx")
+```
+
+The 6-year data are organized in Excel format, and are divided into two sets:
+
+1. Training Set: December 2012 to December 2017
+    + data.xlsx
+        ```{r echo=FALSE}
+          head(data)
+        ```
+    + dividends.xlsx
+        ```{r echo=FALSE}
+          head(dividends)
+        ```
+2. Validation Set: December 2017 to December 2018
+    + data_validation.xlsx
+        ```{r echo=FALSE}
+          head(data_validation)
+        ```
+    + dividends_validation.xlsx
+        ```{r echo=FALSE}
+          head(dividends_validation)
+        ```
+
+5 years worth of data are recommended in developing models of portfolio construction. Too few data may not properly capture the trend of stock prices, while too many may incorporate obsolete patterns. Moreover, training and validation sets start in December of the previous year in order to compute monthly returns for January the following year (thus having complete year return data).
+
+One of the limitations of the data gathered is the availability of information regarding the dividends distributed prior to March 2013. This study assumes that no dividends are given for the first 2 months of 2013. This is a safe assumption as companies usually distribute dividends starting at the end of the first quarter of each year.
+
+Several variables are used in the development of Model 2:
+
+1. $R_f$: Average risk-free rate (monthly, %)
+    + Risk-free rates are rates provided by investments that are almost impossible to default, e.g., Treasury bills issued by the government
+2. $R$: Average return on stocks (monthly, %)
+    + Return refers to the amount gained (or lost) by selling a stock
+3. $\sigma_m$: Volatility of market index returns (monthly)
+    + The riskiness of a stock is represented by the volatility or standard deviation of its returns: how much the price fluctuates
+4. $R_m$: Average return on market index (monthly, %)
+    + The market index in this study is the PSE index
+5. $\beta$: Beta of a stock
+    + By how much stock returns move with the returns of the market index
+    + Riskiness of a stock in relation to a benchmark
+6. $\sigma_{mi}^2$: Unsystematic/diversifiable risk
+    + Risk unique to a company; this can be reduced by diversifying investments
+7. $R^2$: R-squared
+    + Percentage of market risk out of total risk
+
+The algorithm and analysis assume that an investor is able to buy and sell a fraction of a stock. However, in practice, one's ability to buy and sell stocks is constrained by board lots, the minimum number of stocks that can be bought or sold at any single transaction, and also by the minimum increments when buying or selling more than one board lot.
+
+
+## **Methodology**
+
+Three libraries are needed for this study:
+
+```{r}
+  library(readxl)
+  library(tidyverse)
+  library(dplyr)
+```
+
+1. readxl: To use read_excel,
+2. tidyverse: To use pipe %>%,
+3. dplyr: To use bind_rows.
+
+Once data is loaded into R, exploration of the data is done. Graphs of the level of the PSE index and the prices of the 10 stocks are generated in order to appreciate the riskiness of the investment.
+
+In order to perform computations, daily data are converted to monthly data. The cleaning involves selecting only the month-end prices and adding dividends to month-end prices. This is done for both training and validation sets.
+
+Monthly returns (%) are computed as
+$$r_i = \frac{P_i - P_{i-1}}{P_{i-1}} \cdot 100$$
+where $r_i$ is the return and $P_i$ is the price at the end of month $i$. This is done for both training and validation sets.
+
+For illustrations of the use of models in this project, it is assumed that an investor has PHP100,000 to invest.
+
+### Model 1: Equal investments
+
+To construct the simplest portfolio, the training set `data` is ignored. In Model 1, PHP100,000 is invested equally among the 10 given stocks. An investor buys PHP10,000 worth of each stock at the start of January 2018. The risk of the resulting portfolio is computed. The performance of the portfolio is tracked up to the end of December 2018 using the monthly returns of the validation set, and the return during the validation period is computed.
+
+The risk of a portfolio with $n$ stocks is computed (in matrix form) as
+$$\sigma_p = \sqrt{w^T \Omega w}$$
+where $w$ is an $n \times 1$ vector of weights of the stocks in the portfolio, and $\Omega$ is the $n \times n$ variance-covariance matrix of the stock returns. Variance is the square of standard deviation. Covariance represents how two variables move with each other, factoring in the correlation between them.
+
+In order to gain additional insights, the performance of the index is also tracked. The price fluctuations during the investment period is presented in order to make sense of the result of Model 1.
+
+### Model 2: Single-index model
+
+The model is based on the paper [*Algorithm for construction of portfolio of
+stocks using Treynor’s ratio*](https://mpra.ub.uni-muenchen.de/40134/1/Algorithm_for_construction_of_portfolio_of_stocks_using_Treynora_Oes_ratio.pdf) by Pankaj Sinha and Lavleen Goyal of the Faculty of Management Studies, University of Delhi. It is a single-index model since the algorithm uses only one benchmark index in the decision-making process of selecting a set of stocks to invest in.
+
+The following variables are computed:
+
+1. $R_f$
+    + 0.8 of the mean of the 91-day Treasury bill rates
+    + The product is divided by 3 in order to come up with monthly rates
+2. $R$
+    + Mean of the monthly returns of the stocks
+3. $\sigma_m$
+    + Standard deviation of the monthly returns of the PSE index
+4. $R_m$
+    + Mean of the monthly returns of the PSE index
+
+Linear regression is performed on each stock's monthly returns: the dependent variable is the stock's monthly returns, while the independent variable is the PSE index monthly returns. Based on the results of the regressions, the following variables are taken:
+
+1. $\beta$
+    + Coefficient of the independent variable
+2. $\sigma_{mi}^2$
+    + Residual sum of squares divided by the difference between the number of observations and the number of data points in the independent variable
+3. $R^2$
+    + R-squared
+
+An indicator combining stock $i$ returns and risk is the Treynor ratio:
+$$T_i = \frac{R_i - R_f}{\beta_i}$$
+which can be interpreted as one's gains from investing in a stock instead of Treasury bills, taking into account the riskiness of the stock market. The stocks are ranked in decreasing order of their Treynor ratio.
+
+A cut-off point is computed by first determining
+$$C_k = \frac{\sigma_m^2 \displaystyle\sum_{i=1}^k \frac{\beta_i(R_i - R_f)}{\sigma_{mi}^2}}{1 + \sigma_m^2 \displaystyle\sum_{i=1}^k \frac{\beta_i^2}{\sigma_{mi}^2}}$$
+where $k$ is the ranking of the $i^\text{th}$ stock.
+
+$T_i$ is compared with $C_i$:
+
+  + If $T_i > C_i$, then stock $i$ should be included in the portfolio.
+  + Otherwise, do not include stock $i$.
+
+$C^*$ is chosen as the $C_i$ of the last stock to be included in the portfolio.
+
+The weights $w_i$ of the selected stocks are computed: $\displaystyle w_i = \frac{Z_i}{\text{total } Z_i}$ where
+$$Z_i = \frac{\beta_i}{\sigma_{mi}^2} (T_i - C^*).$$
+
+The resulting portfolio's expected risk and return are computed:
+$$\sigma_p = \sqrt{\beta_p^2 \sigma_m^2 + \sum w_i^2 R_i^2}$$
+$$R_p = \sum w_i R_i$$
+
+Based on the recommendations by the single-index model, performance of the portfolio is tracked using the monthly returns of the validation set. The actual risk and return during the validation period is computed.
+
+### Model 3: Single-index model with equal weights
+
+Using the result of Model 2, Model 3 picks the recommended stocks, but invests equally among them. The performance of the portfolio in 2018 is tracked, and the risk and returns are presented together with the results of the other models.
+
+
+## **Results and Analysis**
+
+In order to visualize how risky investing in stocks is, the following graphs are generated. PSEi is a basket of stocks representing the entire PSE. The prices of PLDT and Meralco are separated because of their high prices, while those of Ayala Land and DMC are due to their low prices.
+
+```{r echo=FALSE}
+  ggplot(data = data, aes(x = date, y = psei)) + geom_line(size = 0.5)
+```
+
+```{r echo=FALSE}
+  ggplot(data = data, aes(x = date, y = tel)) + geom_line(size = 0.5)
+```
+
+```{r echo=FALSE}
+  ggplot(data = data, aes(x = date, y = mer)) + geom_line(size = 0.5)
+```
+
+```{r echo=FALSE}
+  df <- data %>% select(date, bdo, bpi, jfc, secb, smc, urc) %>% gather(key = "stocks", value = "price", -date)
+
+  ggplot(df, aes(x = date, y = price)) + geom_line(aes(color = stocks), size = 1) + theme_minimal()
+```
+
+```{r echo=FALSE}
+  df <- data %>% select(date, ali, dmc) %>% gather(key = "stocks", value = "price", -date)
+
+  ggplot(df, aes(x = date, y = price)) + geom_line(aes(color = stocks), size = 1) + theme_minimal()
+```
+
+For the period December 2012 to December 2017, the Philippine stock market had an increasing trend. However, individual stocks had a mix of trends. The daily up and down movements emphasize that stock investing is unpredictable. However, one can possibly gain by investing long-term, waiting out the low points to return (hopefully) to their previous high prices.
+
+```{r include=FALSE}
+  data$year <- as.numeric(format(data$date, "%Y"))
+  data$month <- as.numeric(format(data$date, "%m"))
+  data$day <- as.numeric(format(data$date, "%d"))
+  data$ym <- paste0(data$year, data$month)
+  data_monthly <- aggregate(day ~ year + month, data, max) %>% arrange(year)
+  data_monthly$date <- paste0(data_monthly$year, data_monthly$month, data_monthly$day)
+  data_monthly$ym <- paste0(data_monthly$year, data_monthly$month)
+  dividends$year <- as.numeric(format(dividends$date, "%Y"))
+  dividends$month <- as.numeric(format(dividends$date, "%m"))
+  dividends$ym <- paste0(dividends$year, dividends$month)
+  dividends[is.na(dividends)] <- 0
+  dividends <- dividends %>% select(-date, -year, -month)
+  dividends <- dividends %>% group_by(ym) %>% summarise_all(funs(sum))
+  data$date <- paste0(data$year, data$month, data$day)
+  data <- data %>% select(-day)
+  data_monthly <- merge(data, data_monthly[, c("date", "ym")])
+  data_monthly <- bind_rows(data_monthly, dividends) %>% select(-date) %>% group_by(ym) %>% summarise_all(funs(sum(., na.rm = TRUE)))
+  data_monthly <- data_monthly[order(data_monthly$year, data_monthly$month), ]
+  data_monthly <- data_monthly %>% select(-year, -month)
+  data_validation$year <- as.numeric(format(data_validation$date, "%Y"))
+  data_validation$month <- as.numeric(format(data_validation$date, "%m"))
+  data_validation$day <- as.numeric(format(data_validation$date, "%d"))
+  data_validation$ym <- paste0(data_validation$year, data_validation$month)
+  data_validation_monthly <- aggregate(day ~ year + month, data_validation, max) %>% arrange(year)
+  data_validation_monthly$date <- paste0(data_validation_monthly$year, data_validation_monthly$month, data_validation_monthly$day)
+  data_validation_monthly$ym <- paste0(data_validation_monthly$year, data_validation_monthly$month)
+  dividends_validation$year <- as.numeric(format(dividends_validation$date, "%Y"))
+  dividends_validation$month <- as.numeric(format(dividends_validation$date, "%m"))
+  dividends_validation$ym <- paste0(dividends_validation$year, dividends_validation$month)
+  dividends_validation[is.na(dividends_validation)] <- 0
+  dividends_validation <- dividends_validation %>% select(-date, -year, -month)
+  dividends_validation <- dividends_validation %>% group_by(ym) %>% summarise_all(funs(sum))
+  data_validation$date <- paste0(data_validation$year, data_validation$month, data_validation$day)
+  data_validation <- data_validation %>% select(-day)
+  data_validation_monthly <- merge(data_validation, data_validation_monthly[, c("date", "ym")])
+  data_validation_monthly <- bind_rows(data_validation_monthly, dividends_validation) %>% select(-date) %>% group_by(ym) %>% summarise_all(funs(sum(., na.rm = TRUE)))
+  data_validation_monthly <- data_validation_monthly[order(data_validation_monthly$year, data_validation_monthly$month), ]
+  data_validation_monthly <- data_validation_monthly %>% select(-year, -month)
+```
+
+Converting daily to monthly data produces more manageable training and validation sets:
+
+```{r}
+  head(data_monthly)
+```
+
+```{r}
+  head(data_validation_monthly)
+```
+
+Once monthly returns are computed, portfolios are created.
+
+```{r include=FALSE}
+  r_m <- ((as.data.frame(data_monthly$psei) - mutate_all(as.data.frame(data_monthly$psei), lag))/mutate_all(as.data.frame(data_monthly$psei), lag))[-1, ]*100
+  r <- ((as.data.frame(data_monthly[-1:-3]) - mutate_all(as.data.frame(data_monthly[-1:-3]), lag))/mutate_all(as.data.frame(data_monthly[-1:-3]), lag))[-1, ]*100
+  r_validation_m <- ((as.data.frame(data_validation_monthly$psei) - mutate_all(as.data.frame(data_validation_monthly$psei), lag))/mutate_all(as.data.frame(data_validation_monthly$psei), lag))[-1, ]*100
+  r_validation <- ((as.data.frame(data_validation_monthly[-1:-3]) - mutate_all(as.data.frame(data_validation_monthly[-1:-3]), lag))/mutate_all(as.data.frame(data_validation_monthly[-1:-3]), lag))[-1, ]*100
+```
+
+### Model 1: Equal investments
+
+```{r include=FALSE}
+  portfolio1_stocks <- (100000/10)/data_validation[1, 4:13]
+  portfolio1_start <- portfolio1_stocks*data_validation[1, 4:13]
+  portfolio1_w <- rep(1/10, 10)
+  portfolio1_risk <- sqrt(t(portfolio1_w)%*%cov(r_validation)%*%portfolio1_w)
+  portfolio1_progress <- portfolio1_start
+  for (i in 1:nrow(r_validation)){
+    portfolio1_progress[i+1, ] <- portfolio1_progress[i, ]*(1+r_validation[i, ]/100)
+  }
+  portfolio1_end <- portfolio1_progress[nrow(r_validation)+1, ]
+  portfolio1_return <- (sum(portfolio1_end)/sum(portfolio1_start) - 1)*100
+  psei_return <- (prod(1+r_validation_m/100) - 1)*100
+  results <- data_frame(Portfolio = "Portfolio 1", Model = "Equal Weights", Risk = as.numeric(portfolio1_risk), Return = portfolio1_return, PSEi = psei_return)
+```
+
+The result of investing equally in the 10 stocks at the start of 2018, selling them at the end of each month, then using the proceeds to buy the same stocks with the same weights are as follows:
+
+```{r echo=FALSE}
+  results
+```
+
+The risk of Portfolio 1 is `r portfolio1_risk`%, which means throughout 2018, returns move in the interval --`r portfolio1_risk`% to `r portfolio1_risk`% every month. Overall, however, the portfolio lost `r -portfolio1_return`% during the year. But compared with the performance of the benchmark PSE index, Portfolio 1 did better. The PSE index lost `r -psei_return`% during the year.
+
+In order to understand these results, the performances of the index and the stocks in 2018 are graphed:
+
+```{r echo=FALSE}
+  data_validation <- read_excel("data_validation.xlsx")
+  ggplot(data = data_validation, aes(x = date, y = psei)) + geom_line(size = 0.5)
+```
+
+```{r echo=FALSE}
+  ggplot(data = data_validation, aes(x = date, y = tel)) + geom_line(size = 0.5)
+```
+
+```{r echo=FALSE}
+  ggplot(data = data_validation, aes(x = date, y = mer)) + geom_line(size = 0.5)
+```
+
+```{r echo=FALSE}
+  df <- data_validation %>% select(date, bdo, bpi, jfc, secb, smc, urc) %>% gather(key = "stocks", value = "price", -date)
+
+  ggplot(df, aes(x = date, y = price)) + geom_line(aes(color = stocks), size = 1) + theme_minimal()
+```
+
+```{r echo=FALSE}
+  df <- data_validation %>% select(date, ali, dmc) %>% gather(key = "stocks", value = "price", -date)
+
+  ggplot(df, aes(x = date, y = price)) + geom_line(aes(color = stocks), size = 1) + theme_minimal()
+```
+
+2018 was a particularly bad year for the Philippine stock market. The graph of the benchmark PSE index clearly shows a downtrend. Most of the stocks in the list were also losing steam. In 2018, the Philippines experienced high increases in the prices of basic goods and services. Consumer price inflation, together with the United States Federal Reserve increasing its interest rates, affected foreign and local investments in the Philippine stock market.
+
+The equal weights in the 10 stocks produced better returns than the overall stock market as these are blue chip companies with strong brands and balance sheets.
+
+### Model 2: Single-index model
+
+```{r include=FALSE}
+  R_f <- 0.8*mean(data_monthly$tbill)/3
+  R <- 1.2*colMeans(r)
+  sigma_m <- sd(r_m)
+  R_m <- mean(r_m)
+  dep_var <- colnames(data[ , -1:-3])
+  dep_var <- dep_var[-11:-13]
+  data_lin_reg <- mutate(psei = r_m, r)
+  lin_reg <- expand.grid(ind_var = "psei", dep_var = dep_var) %>% mutate(reg = paste(dep_var, "~", "psei")) %>% group_by(reg) %>% mutate(beta = lm(reg, data_lin_reg)$coefficients[2], sigma_mi2 = anova(lm(reg, data_lin_reg))["Residuals", "Sum Sq"]/sum(anova(lm(reg, data_lin_reg))$Df), R2 = summary(lm(reg, data_lin_reg))$r.squared) %>% ungroup()
+  beta <- lin_reg$beta
+  sigma_mi2 <- lin_reg$sigma_mi2
+  R2 <- lin_reg$R2
+  T <- (R - R_f)/beta
+  sum1 <- beta*(R - R_f)/sigma_mi2
+  sum2 <- (beta^2)/sigma_mi2
+  summary <- data.frame(stock = dep_var, R, beta, sigma_mi2, T, sum1, sum2) %>% arrange(desc(T))
+  c <- NULL
+  for(i in 1:nrow(summary)){
+    c[i] <- ((sigma_m^2)*sum(summary$sum1[1:i]))/(1 + (sigma_m^2)*sum(summary$sum2[1:i]))
+  }
+  summary <- summary %>% mutate(c)
+  c_count <- sum(summary$T > summary$c)
+  C <- c[c_count]
+  index <- order(-data.frame(dep_var, T)$T)[1:c_count]
+  summary <- summary[1:c_count, -6:-7]
+  Z <- (summary$beta/(summary$sigma_mi2))*(summary$T - C)
+  w <- Z/sum(Z)
+  summary <- summary %>% mutate("weight (%)" = w*100)
+  ideal_portfolio <- data_frame(Stock = summary$stock, "Weight (%)" = summary$`weight (%)`)
+```
+
+Applying the algorithm for the single-index model on the December 2012 to December 2017 data, the following stocks with their corresponding weight are recommended for investment:
+
+```{r echo=FALSE}
+  ideal_portfolio
+```
+
+Out of the 10 stocks in the initial list, only 6 were recommended. These are the stocks with high Treynor ratio. Investors can get the most return from these stocks given their accompanying risk.
+
+If the trend of 2012--2017 continues, the expected risk and return of the recommended portfolio are as follows:
+
+```{r include=FALSE}
+  beta_p <- sum(w*beta[index])
+  sigma_p <- sqrt((beta_p^2)*(sigma_m^2) + sum((w^2)*(sigma_mi2[index])))
+  R_p <- sum(w*R[index])
+  ideal_results <- data_frame(Model = "Single-Index", Risk = sigma_p, Return = R_p)
+```
+
+```{r echo=FALSE}
+  ideal_results
+```
+
+The risk is expected to go down to `r sigma_p`%, with a positive return of `r R_p`%.
+
+Applying these recommendations to the validation set yields the following result:
+
+```{r include=FALSE}
+  portfolio2_amount <- 100000*(summary$`weight (%)`/100)
+  portfolio2_stocks <- portfolio2_amount/data_validation[1, index+3]
+  portfolio2_start <- portfolio2_stocks*data_validation[1, index+3]
+  portfolio2_w <- summary$`weight (%)`/100
+  portfolio2_risk <- sqrt(t(portfolio2_w)%*%cov(r_validation[ , index])%*%portfolio2_w)
+  portfolio2_progress <- portfolio2_start
+  for (i in 1:nrow(r_validation)){
+    portfolio2_progress[i+1, ] <- portfolio2_progress[i, ]*(1+r_validation[i, index]/100)
+  }
+  portfolio2_end <- portfolio2_progress[nrow(r_validation)+1, ]
+  portfolio2_return <- (sum(portfolio2_end)/sum(portfolio2_start) - 1)*100
+  results <- bind_rows(results, data_frame(Portfolio = "Portfolio 2", Model = "Single-Index", Risk = as.numeric(portfolio2_risk), Return = portfolio2_return, PSEi = psei_return))
+```
+
+```{r echo=FALSE}
+  results
+```
+
+The risk marginally increased to `r portfolio2_risk`% but the loss was greatly mitigated: from `r -portfolio1_return`% to `r -portfolio2_return`%. And the performance of Portfolio 2 dominated the performance of the benchmark PSE index. As explained in the previous section, the macroeconomic environment of 2018 influenced the performance of the portfolio.
+
+### Model 3: Single-index model with equal weights
+
+```{r include=FALSE}
+  portfolio3_stocks <- (100000/length(index))/data_validation[1, index+3]
+  portfolio3_start <- portfolio3_stocks*data_validation[1, index+3]
+  portfolio3_w <- rep(1/length(index), length(index))
+  portfolio3_risk <- sqrt(t(portfolio3_w)%*%cov(r_validation[ , index])%*%portfolio3_w)
+  portfolio3_progress <- portfolio3_start
+  for (i in 1:nrow(r_validation)){
+    portfolio3_progress[i+1, ] <- portfolio3_progress[i, ]*(1+r_validation[i, index]/100)
+  }
+  portfolio3_end <- portfolio3_progress[nrow(r_validation)+1, ]
+  portfolio3_return <- (sum(portfolio3_end)/sum(portfolio3_start) - 1)*100
+  results <- bind_rows(results, data_frame(Portfolio = "Portfolio 3", Model = "Single-Index + Equal Weights", Risk = as.numeric(portfolio3_risk), Return = portfolio3_return, PSEi = psei_return))
+```
+
+Using the recommended stocks from Model 2, but investing equally among the 6 stocks, the third portfolio provides the following risk and return profile:
+
+```{r echo=FALSE}
+  results
+```
+
+Portfolio 3 still beat the benchmark. However, the increased risk of `r portfolio3_risk`% does not compensate the huge loss of `r -portfolio3_return`% which is comparable with that of Portfolio 1.
+
+This portfolio shows proof that even if one has the best stocks, it is imperative that investments in them must not be blindly made. Apportioning wisely one's money is important so that losses in one investment may effectively be mitigated by gains from the others.
+
+## **Conclusion**
+
+It is important to remember that the performance of a portfolio is always evaluated against a benchmark. Hence, even if the simulation presented in this study shows losses, compared with the market index, the single-index model still provides superior results. And the performance must also be placed in its proper context. In this project, the bad year of the Philippine stock market highly affected the performance of the single-index model. Overall, the model may be viewed as a viable cushion against huge losses, and it can also act as a risk mitigant.
+
+Furthermore, the result of the algorithm must be viewed as a recommendation, and not an absolute investment guideline. Investments must be adjusted according to stocks' board lots (see Data and Limitations section).
+
+The algorithm may be used recursively to analyze if the recommended portfolio of stocks may be reduced further in terms of the number of stocks to be chosen: instead of starting with the full list of stocks, a smaller set (the portfolio recommended by the algorithm) may be used as the new input. This is useful especially if the investor has a limited amount of money to invest, or if board lots restrict one's buying and selling power.
+
+The code my be used to determine which cryptocurrencies to invest in. Historical prices for several cryptocurrencies may be found in the data set [Cryptocurrency Historical Prices](https://www.kaggle.com/sudalairajkumar/cryptocurrencypricehistory). A possible benchmark index is the [Cryptocurrencies Index 30](https://cci30.com/) which tracks the performance of the blockchain sector. The 3-month United States Treasury bills may be used as the risk-free rate.
+
+Investing in the stock market is a great addition to one's portfolio. However, care and caution must be taken in order to safeguard one's money. As mentioned previously, stock market investing is for the long haul. One must not be shaken by huge losses, especially by good blue chip companies. A high IQ is best paired with a high EQ. Happy investing!
